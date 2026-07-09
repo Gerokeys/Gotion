@@ -1,0 +1,212 @@
+// Gotion — personal OS data model
+//
+// Dev default is SQLite (via the libsql driver adapter — Prisma 7 requires
+// a driver adapter for every provider) so the app runs with zero setup.
+// The connection URL itself lives in prisma.config.ts + src/lib/db.ts, not
+// here — Prisma 7 no longer allows `url` in the datasource block.
+//
+// To move to Supabase Postgres (for Vercel deploy):
+//   1. change provider below to "postgresql"
+//   2. swap the libsql adapter for @prisma/adapter-pg in prisma.config.ts
+//      and src/lib/db.ts, pointed at DATABASE_URL
+//   3. npx prisma migrate dev
+// Status-like fields are strings (not Prisma enums) so the same schema
+// works on both providers; the allowed values live in src/lib/types.ts.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat            = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------- Notes & pages ----------
+
+model Page {
+  id        String   @id @default(cuid())
+  title     String   @default("Untitled")
+  icon      String?
+  parentId  String?
+  parent    Page?    @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Page[]   @relation("PageTree")
+  blocks    Block[]
+  position  Float    @default(0)
+  isInbox   Boolean  @default(false) // quick-capture target
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  // "text" | "h1" | "h2" | "h3" | "todo" | "bullet" | "toggle"
+  type      String   @default("text")
+  content   String   @default("")
+  checked   Boolean  @default(false)
+  collapsed Boolean  @default(false)
+  parentId  String? // toggle children
+  position  Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId, position])
+}
+
+// ---------- Tasks ----------
+
+model Project {
+  id       String  @id @default(cuid())
+  name     String
+  color    String?
+  position Float   @default(0)
+  archived Boolean @default(false)
+  tasks    Task[]
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  notes       String?
+  dueDate     String? // local date "YYYY-MM-DD"
+  priority    Int       @default(4) // 1 = urgent … 4 = none (Todoist-style)
+  // "todo" | "doing" | "done"
+  status      String    @default("todo")
+  completedAt DateTime?
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  position    Float     @default(0)
+  tags        TaskTag[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([dueDate])
+  @@index([status])
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  color String?
+  tasks TaskTag[]
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+}
+
+// ---------- Focus (pomodoro) ----------
+
+model FocusSession {
+  id          String   @id @default(cuid())
+  startedAt   DateTime @default(now())
+  durationMin Int // completed focus minutes
+  // "focus" | "break"
+  kind        String   @default("focus")
+  note        String?
+  date        String // local date "YYYY-MM-DD" for fast per-day rollups
+
+  @@index([date])
+}
+
+// ---------- Sleep ----------
+
+model SleepLog {
+  id          String  @id @default(cuid())
+  date        String  @unique // morning date "YYYY-MM-DD" (the day you woke up)
+  bedtime     String // "HH:mm"
+  wakeTime    String // "HH:mm"
+  durationMin Int // computed on save, handles crossing midnight
+  quality     Int // 1–5
+  notes       String?
+}
+
+// ---------- Habits ----------
+
+model Habit {
+  id        String         @id @default(cuid())
+  name      String
+  emoji     String?
+  color     String?
+  position  Float          @default(0)
+  archived  Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  checkins  HabitCheckin[]
+}
+
+model HabitCheckin {
+  id      String @id @default(cuid())
+  habitId String
+  habit   Habit  @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date    String // "YYYY-MM-DD"
+
+  @@unique([habitId, date])
+}
+
+// ---------- Quit tracker ----------
+
+// One row per checked-in day. Streaks are derived, never stored.
+model QuitDay {
+  id     String @id @default(cuid())
+  date   String @unique // "YYYY-MM-DD"
+  // "clean" | "relapse"
+  status String
+}
+
+model Relapse {
+  id        String   @id @default(cuid())
+  date      String // "YYYY-MM-DD"
+  time      String? // "HH:mm"
+  trigger   String? // stress | boredom | loneliness | insomnia | social-media | other
+  mood      String? // anxious | low | numb | fine | restless | other
+  before    String? // what was happening right before
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model UrgeLog {
+  id        String   @id @default(cuid())
+  loggedAt  DateTime @default(now())
+  date      String // "YYYY-MM-DD"
+  intensity Int? // 1–5
+  action    String? // replacement action taken, if any
+  // "passed" | "relapsed" | null (not yet resolved)
+  outcome   String?
+
+  @@index([date])
+}
+
+// User-editable "why I'm quitting" list shown on the urge screen.
+model Reason {
+  id       String @id @default(cuid())
+  text     String
+  position Float  @default(0)
+}
+
+// User-editable replacement actions suggested on the urge screen.
+model ReplacementAction {
+  id       String @id @default(cuid())
+  text     String
+  emoji    String?
+  position Float   @default(0)
+}
+
+// ---------- Misc ----------
+
+model Setting {
+  key   String @id
+  value String
+}
