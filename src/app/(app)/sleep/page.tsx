@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { addDays, toDateStr, todayStr } from "@/lib/dates";
+import { addDays, startOfDayUTC, toDateStr, todayStr } from "@/lib/dates";
 import { SleepPageClient } from "@/components/sleep/sleep-page-client";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function SleepPage() {
   const today = todayStr();
   const start = addDays(today, -29);
-  const startDate = new Date(start + "T00:00:00");
+  const startDate = startOfDayUTC(start);
 
   const [logs, completedTasks, focusSessions] = await Promise.all([
     db.sleepLog.findMany({

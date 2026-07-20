@@ -12,32 +12,46 @@ const BREAK_MIN = 5;
 
 type Mode = "focus" | "break";
 
+// The countdown is driven by a fixed end timestamp rather than decrementing
+// once per tick, so it stays correct even if the interval gets throttled or
+// fully suspended while the screen is off — whenever it next runs (or the
+// tab regains visibility), it recomputes from the real elapsed wall-clock
+// time instead of however many ticks happened to fire.
 export function PomodoroTimer({ onLogged }: { onLogged: (minutes: number) => void }) {
   const [mode, setMode] = useState<Mode>("focus");
   const [targetSeconds, setTargetSeconds] = useState(FOCUS_MIN * 60);
   const [remaining, setRemaining] = useState(FOCUS_MIN * 60);
   const [running, setRunning] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const endAtRef = useRef<number | null>(null);
+  const modeRef = useRef(mode);
+  const targetRef = useRef(targetSeconds);
+  modeRef.current = mode;
+  targetRef.current = targetSeconds;
 
   useEffect(() => {
     if (!running) return;
-    intervalRef.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          finishInterval(mode, targetSeconds);
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
+
+    function tick() {
+      const endAt = endAtRef.current;
+      if (endAt === null) return;
+      const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      setRemaining(left);
+      if (left <= 0) finishInterval(modeRef.current, targetRef.current);
+    }
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    document.addEventListener("visibilitychange", tick);
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, mode, targetSeconds]);
+  }, [running]);
 
   function finishInterval(finishedMode: Mode, target: number) {
     setRunning(false);
+    endAtRef.current = null;
     if (finishedMode === "focus") {
       const minutes = Math.round(target / 60);
       logFocusSession(minutes, "focus");
@@ -57,8 +71,19 @@ export function PomodoroTimer({ onLogged }: { onLogged: (minutes: number) => voi
     setRemaining(secs);
   }
 
+  function toggleRunning() {
+    if (running) {
+      setRunning(false);
+      endAtRef.current = null;
+      return;
+    }
+    endAtRef.current = Date.now() + remaining * 1000;
+    setRunning(true);
+  }
+
   function stopAndReset() {
     setRunning(false);
+    endAtRef.current = null;
     if (mode === "focus") {
       const elapsed = targetSeconds - remaining;
       const minutes = Math.round(elapsed / 60);
@@ -120,7 +145,7 @@ export function PomodoroTimer({ onLogged }: { onLogged: (minutes: number) => voi
       </div>
 
       <div className="flex items-center gap-3">
-        <Button size="lg" onClick={() => setRunning((r) => !r)} className="w-32">
+        <Button size="lg" onClick={toggleRunning} className="w-32">
           {running ? (
             <>
               <Pause className="size-4" /> Pause

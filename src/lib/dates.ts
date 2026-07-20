@@ -1,21 +1,67 @@
 // All user-facing dates in Gotion are *local* calendar dates stored as
-// "YYYY-MM-DD" strings. This keeps sleep/habit check-ins pinned to the day
-// the user experienced, independent of server timezone.
+// "YYYY-MM-DD" strings. This is a single-user app, so "local" is pinned to
+// one fixed timezone rather than the runtime's own — Vercel's servers run in
+// UTC, which would otherwise make "today" flip over at the wrong moment
+// (e.g. still evening in Nairobi but already tomorrow in UTC).
+const TIMEZONE = process.env.NEXT_PUBLIC_TIMEZONE || "UTC";
+
+const dateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE });
 
 export function toDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return dateFormatter.format(d);
 }
 
 export function todayStr(): string {
   return toDateStr(new Date());
 }
 
+/** Current hour (0-23) in the app's fixed timezone. */
+export function currentHour(): number {
+  const s = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+  return Number(s) % 24;
+}
+
 export function parseDateStr(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+/**
+ * The UTC instant that is midnight at the *start* of dateStr in the app's
+ * fixed timezone — for comparing a "YYYY-MM-DD" against a real DateTime
+ * column (e.g. Task.completedAt) without drifting by the UTC offset.
+ */
+export function startOfDayUTC(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const guess = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIMEZONE,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+    .formatToParts(guess)
+    .reduce<Record<string, string>>((acc, p) => ((acc[p.type] = p.value), acc), {});
+
+  const asUTC = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  const offsetMs = asUTC - guess.getTime();
+  return new Date(guess.getTime() - offsetMs);
 }
 
 export function addDays(dateStr: string, n: number): string {

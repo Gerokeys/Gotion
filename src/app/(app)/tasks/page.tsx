@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { parseDateStr, todayStr } from "@/lib/dates";
+import { addDays, startOfDayUTC, todayStr } from "@/lib/dates";
 import { TodayView } from "@/components/tasks/today-view";
 import type { ClientTask } from "@/components/tasks/types";
 import type { Priority, TaskStatus } from "@/lib/types";
@@ -8,9 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function TasksTodayPage() {
   const today = todayStr();
-  const startOfToday = parseDateStr(today);
-  const startOfTomorrow = new Date(startOfToday);
-  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const startOfToday = startOfDayUTC(today);
+  const startOfTomorrow = startOfDayUTC(addDays(today, 1));
 
   const [tasks, projects] = await Promise.all([
     db.task.findMany({

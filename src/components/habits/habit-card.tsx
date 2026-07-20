@@ -46,17 +46,12 @@ export function HabitCard({
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={toggle}
-            className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-lg transition-colors",
-              checkedToday ? "border-transparent text-primary-foreground" : "border-border text-transparent"
-            )}
-            style={checkedToday ? { backgroundColor: color } : undefined}
-            aria-label={checkedToday ? "Checked in today" : "Check in today"}
+          <span
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-lg"
+            style={{ backgroundColor: `color-mix(in oklch, ${color} 18%, transparent)` }}
           >
-            {checkedToday ? <Check className="size-4" /> : (habit.emoji ?? "")}
-          </button>
+            {habit.emoji ?? "🔥"}
+          </span>
           <div>
             <p className="font-medium">{habit.name}</p>
             <p className="text-xs text-muted-foreground">
@@ -66,24 +61,38 @@ export function HabitCard({
           </div>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="rounded p-1 text-muted-foreground hover:bg-accent" aria-label="Habit menu">
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => {
-                archiveHabit(habit.id);
-                onArchived();
-              }}
-            >
-              Archive
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggle}
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+              checkedToday ? "border-transparent text-primary-foreground" : "border-border hover:border-primary"
+            )}
+            style={checkedToday ? { backgroundColor: color } : undefined}
+            aria-label={checkedToday ? "Checked in today" : "Check in today"}
+          >
+            {checkedToday && <Check className="size-4" />}
+          </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="rounded p-1 text-muted-foreground hover:bg-accent" aria-label="Habit menu">
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  archiveHabit(habit.id);
+                  onArchived();
+                }}
+              >
+                Archive
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="mt-4">

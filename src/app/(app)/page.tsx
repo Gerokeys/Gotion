@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { startOfWeekStr, todayStr } from "@/lib/dates";
+import { currentHour, startOfWeekStr, todayStr } from "@/lib/dates";
 import { quitStreaks } from "@/lib/streaks";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import type { ClientTask } from "@/components/tasks/types";
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      greeting={greetingForHour(new Date().getHours())}
+      greeting={greetingForHour(currentHour())}
       initialTasks={clientTasks}
       projects={projects}
       quitCurrent={quitCurrent}
